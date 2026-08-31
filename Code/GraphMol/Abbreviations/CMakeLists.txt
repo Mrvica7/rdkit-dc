@@ -17,3 +17,9 @@ endif()
 if(RDK_BUILD_NANOBIND_WRAPPERS)
   add_subdirectory(nbWrap)
 endif()
+
+# AdvancedDepiction depends on both the base Depictor and Abbreviations. Build
+# it here so the dependency direction remains one-way and neither lower-level
+# library needs to know about the high-level planner.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../AdvancedDepiction
+                 ${CMAKE_CURRENT_BINARY_DIR}/../AdvancedDepiction)

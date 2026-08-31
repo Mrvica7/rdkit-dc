@@ -15,12 +15,15 @@ endif()
 
 rdkit_library(Depictor
               RDDepictor.cpp EmbeddedFrag.cpp DepictUtils.cpp Templates.cpp
+              DepictionScore.cpp AdvancedDepictor.cpp
               LINK_LIBRARIES ${COORDGEN_LIB} SmilesParse SubstructMatch MolTransforms GraphMol RDGeneral MolAlign)
 target_compile_definitions(Depictor PRIVATE RDKIT_DEPICTOR_BUILD)
 
 rdkit_headers(DepictUtils.h
               EmbeddedFrag.h
-              RDDepictor.h DEST GraphMol/Depictor)
+              RDDepictor.h
+              DepictionScore.h
+              AdvancedDepictor.h DEST GraphMol/Depictor)
 
 rdkit_test(testDepictor testDepictor.cpp
            LINK_LIBRARIES Depictor ChemTransforms FileParsers SmilesParse MolAlign)
@@ -32,6 +35,7 @@ set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES
 
 
 rdkit_catch_test(depictorCatch catch_tests.cpp LINK_LIBRARIES Depictor SmilesParse FileParsers)
+rdkit_catch_test(advancedDepictorCatch advanced_catch_tests.cpp LINK_LIBRARIES Depictor SmilesParse)
 
 
 if(RDK_BUILD_BOOST_PYTHON_WRAPPERS)
