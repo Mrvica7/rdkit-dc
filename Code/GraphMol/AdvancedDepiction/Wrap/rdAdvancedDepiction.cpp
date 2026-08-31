@@ -98,6 +98,10 @@ BOOST_PYTHON_MODULE(rdAdvancedDepiction) {
       .def_readwrite(
           "maxAbbreviations",
           &RDKit::AdvancedDepiction::SmartAbbreviationParams::maxAbbreviations)
+      .def_readwrite("beamWidth",
+                     &RDKit::AdvancedDepiction::SmartAbbreviationParams::beamWidth)
+      .def_readwrite("maxTrials",
+                     &RDKit::AdvancedDepiction::SmartAbbreviationParams::maxTrials)
       .def_readwrite(
           "minAtomsForAutoAbbreviation",
           &RDKit::AdvancedDepiction::SmartAbbreviationParams::
@@ -162,6 +166,6 @@ BOOST_PYTHON_MODULE(rdAdvancedDepiction) {
        python::arg("params") =
            RDKit::AdvancedDepiction::SmartAbbreviationParams()),
       "Generate a high-quality 2D depiction and automatically select useful "
-      "abbreviations using a layout-aware objective. The molecule is modified "
-      "in place.");
+      "abbreviations using a bounded layout-aware beam search. The molecule is "
+      "modified in place.");
 }
