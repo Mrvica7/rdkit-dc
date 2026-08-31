@@ -21,6 +21,7 @@ TEST_CASE("commercial abbreviation library includes medicinal chemistry groups")
   CHECK(hasLabel("Fmoc"));
   CHECK(hasLabel("Bpin"));
   CHECK(hasLabel("TBS"));
+  CHECK(hasLabel("Ph"));
 }
 
 TEST_CASE("smart planner can choose Boc when simplification has clear utility") {
@@ -67,4 +68,35 @@ TEST_CASE("smart planner can leave abbreviation disabled") {
   CHECK(result.abbreviations.empty());
   CHECK(result.atomsRemoved == 0);
   CHECK(mol.getNumConformers() == 1);
+}
+
+TEST_CASE("generic phenyl abbreviation is opt-in") {
+  const std::string smiles = "CCCCCCCCCCc1ccccc1";
+
+  std::unique_ptr<RDKit::ROMol> parsed1(RDKit::SmilesToMol(smiles));
+  REQUIRE(parsed1);
+  RDKit::RWMol conservative(*parsed1);
+
+  RDKit::AdvancedDepiction::SmartAbbreviationParams params;
+  params.maxAbbreviations = 1;
+  params.minAtomsForAutoAbbreviation = 0;
+  params.atomReductionReward = 100.0;
+  params.abbreviationPenalty = 0.0;
+  params.minimumObjectiveImprovement = 0.0;
+  params.depictionParams.maxCandidates = 3;
+  params.depictionParams.useCoordGenCandidate = false;
+
+  auto conservativeResult =
+      RDKit::AdvancedDepiction::compute2DCoordsSmart(conservative, params);
+  CHECK(conservativeResult.abbreviations.empty());
+
+  std::unique_ptr<RDKit::ROMol> parsed2(RDKit::SmilesToMol(smiles));
+  REQUIRE(parsed2);
+  RDKit::RWMol aggressive(*parsed2);
+  params.allowPhenylAbbreviation = true;
+
+  auto aggressiveResult =
+      RDKit::AdvancedDepiction::compute2DCoordsSmart(aggressive, params);
+  REQUIRE(aggressiveResult.abbreviations.size() == 1);
+  CHECK(aggressiveResult.abbreviations.front() == "Ph");
 }
