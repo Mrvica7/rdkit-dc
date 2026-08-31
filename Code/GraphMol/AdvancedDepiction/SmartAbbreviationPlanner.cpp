@@ -5,6 +5,7 @@
 
 #include <GraphMol/Abbreviations/Abbreviations.h>
 #include <GraphMol/MolOps.h>
+#include <GraphMol/ROMol.h>
 #include <GraphMol/RWMol.h>
 
 #include <algorithm>
@@ -43,6 +44,13 @@ void refreshRingInfo(RWMol &mol) {
   MolOps::symmetrizeSSSR(mol);
 }
 
+void moveBackToInput(ROMol &destination, RWMol &source) {
+  // ROMol deliberately disables copy assignment, but supports move assignment.
+  // RWMol adds no independent topology storage, so moving its ROMol base back
+  // into a normal Chem.Mol safely replaces the optimized topology/conformers.
+  destination = std::move(static_cast<ROMol &>(source));
+}
+
 std::vector<Abbreviations::AbbreviationDefinition> buildDefinitions(
     const SmartAbbreviationParams &params) {
   auto definitions = getCommercialAbbreviations();
@@ -64,7 +72,7 @@ struct Trial {
 }  // namespace
 
 SmartAbbreviationResult compute2DCoordsSmart(
-    RWMol &mol, const SmartAbbreviationParams &params) {
+    ROMol &mol, const SmartAbbreviationParams &params) {
   SmartAbbreviationResult result;
   if (!mol.getNumAtoms()) {
     return result;
@@ -79,7 +87,7 @@ SmartAbbreviationResult compute2DCoordsSmart(
   result.finalObjective = result.baselineObjective;
 
   if (!params.maxAbbreviations) {
-    mol = current;
+    moveBackToInput(mol, current);
     return result;
   }
 
@@ -97,8 +105,8 @@ SmartAbbreviationResult compute2DCoordsSmart(
 
     // Evaluate each definition independently. RDKit's normal abbreviation
     // function intentionally uses definition order as a greedy priority. Here
-    // we want layout quality to determine priority, so each applicable match is
-    // trialed against the same current molecule before choosing a winner.
+    // layout quality determines priority, so each applicable match is trialed
+    // against the same current molecule before choosing a winner.
     for (const auto &definition : definitions) {
       if (!labelAllowed(definition.label, params)) {
         continue;
@@ -158,7 +166,7 @@ SmartAbbreviationResult compute2DCoordsSmart(
     result.finalObjective = best.objective;
   }
 
-  mol = current;
+  moveBackToInput(mol, current);
   return result;
 }
 
