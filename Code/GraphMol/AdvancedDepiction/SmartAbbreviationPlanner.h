@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace RDKit {
-class RWMol;
+class ROMol;
 
 namespace AdvancedDepiction {
 
@@ -58,10 +58,11 @@ struct RDKIT_ADVANCEDDEPICTION_EXPORT SmartAbbreviationResult {
 };
 
 //! Generate a high-quality 2D depiction while choosing abbreviation matches by
-//! layout-aware objective optimization. The molecule is modified in place and
-//! contains the selected condensed abbreviation atoms and final 2D coordinates.
+//! layout-aware objective optimization. ROMol is used deliberately so the API
+//! works directly with ordinary Python Chem.Mol objects. Internally a mutable
+//! RWMol copy is optimized and moved back into mol at the end.
 RDKIT_ADVANCEDDEPICTION_EXPORT SmartAbbreviationResult
-compute2DCoordsSmart(RWMol &mol,
+compute2DCoordsSmart(ROMol &mol,
                      const SmartAbbreviationParams &params =
                          SmartAbbreviationParams());
 
