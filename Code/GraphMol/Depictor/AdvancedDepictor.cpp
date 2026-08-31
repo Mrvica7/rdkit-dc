@@ -3,6 +3,10 @@
 #include <GraphMol/Conformer.h>
 #include <GraphMol/ROMol.h>
 
+#ifdef RDK_BUILD_COORDGEN_SUPPORT
+#include <CoordGen/CoordGen.h>
+#endif
+
 #include <algorithm>
 #include <limits>
 #include <vector>
@@ -47,7 +51,7 @@ AdvancedDepictionResult compute2DCoordsAdvanced(
   std::vector<Candidate> candidates;
   candidates.reserve(maxCandidates);
 
-  auto evaluate = [&](const Compute2DCoordParameters &input) {
+  auto evaluateRDKit = [&](const Compute2DCoordParameters &input) {
     if (candidates.size() >= maxCandidates) {
       return;
     }
@@ -61,18 +65,22 @@ AdvancedDepictionResult compute2DCoordsAdvanced(
   Compute2DCoordParameters base;
   base.canonOrient = params.canonOrient;
   base.forceRDKit = true;
-  evaluate(base);
+  evaluateRDKit(base);
 
   if (params.useRingTemplates && candidates.size() < maxCandidates) {
     auto templated = base;
     templated.useRingTemplates = true;
-    evaluate(templated);
+    evaluateRDKit(templated);
   }
 
-  // Reserve one candidate slot for CoordGen when requested.
+#ifdef RDK_BUILD_COORDGEN_SUPPORT
+  const bool canAddCoordGen = params.useCoordGenCandidate && maxCandidates > 1;
+#else
+  const bool canAddCoordGen = false;
+#endif
   const unsigned int sampledTarget =
-      params.useCoordGenCandidate && maxCandidates > 1 ? maxCandidates - 1
-                                                       : maxCandidates;
+      canAddCoordGen ? maxCandidates - 1 : maxCandidates;
+
   unsigned int candidateIndex = 0;
   while (candidates.size() < sampledTarget) {
     auto sampled = base;
@@ -81,19 +89,18 @@ AdvancedDepictionResult compute2DCoordsAdvanced(
     sampled.nSamples = params.randomSamples;
     sampled.sampleSeed = params.seed + static_cast<int>(candidateIndex * 7919u);
     sampled.permuteDeg4Nodes = params.permuteDeg4Nodes;
-    evaluate(sampled);
+    evaluateRDKit(sampled);
     ++candidateIndex;
   }
 
-  if (params.useCoordGenCandidate && candidates.size() < maxCandidates) {
-    const bool previousPreference = preferCoordGen;
-    preferCoordGen = true;
-    Compute2DCoordParameters coordgen;
-    coordgen.canonOrient = params.canonOrient;
-    coordgen.forceRDKit = false;
-    evaluate(coordgen);
-    preferCoordGen = previousPreference;
+#ifdef RDK_BUILD_COORDGEN_SUPPORT
+  if (canAddCoordGen && candidates.size() < maxCandidates) {
+    RDKit::ROMol copy(mol);
+    RDKit::CoordGen::CoordGenParams coordgenParams;
+    const auto confId = RDKit::CoordGen::addCoords(copy, &coordgenParams);
+    candidates.push_back(captureCandidate(copy, confId, params.scoreWeights));
   }
+#endif
 
   const auto best = std::min_element(
       candidates.begin(), candidates.end(),
