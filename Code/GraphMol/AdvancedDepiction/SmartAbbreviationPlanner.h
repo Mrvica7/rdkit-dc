@@ -21,6 +21,15 @@ struct RDKIT_ADVANCEDDEPICTION_EXPORT SmartAbbreviationParams {
   //! Maximum number of abbreviations introduced automatically.
   unsigned int maxAbbreviations = 3;
 
+  //! Number of partial abbreviation plans retained at each search depth.
+  //! A width greater than one allows the planner to recover from locally good
+  //! but globally inferior abbreviation choices while keeping runtime bounded.
+  unsigned int beamWidth = 4;
+
+  //! Hard cap on fully redrawn abbreviation trials. The planner is intended for
+  //! catalog/offline depiction, but must still have predictable upper bounds.
+  unsigned int maxTrials = 96;
+
   //! Do not automatically abbreviate very small molecules unless they have a
   //! hard depiction defect (crossing/clash). This avoids turning ordinary
   //! catalog structures into strings of labels.
@@ -58,9 +67,11 @@ struct RDKIT_ADVANCEDDEPICTION_EXPORT SmartAbbreviationResult {
 };
 
 //! Generate a high-quality 2D depiction while choosing abbreviation matches by
-//! layout-aware objective optimization. ROMol is used deliberately so the API
-//! works directly with ordinary Python Chem.Mol objects. Internally a mutable
-//! RWMol copy is optimized and moved back into mol at the end.
+//! layout-aware objective optimization. A bounded beam search evaluates useful
+//! abbreviation combinations instead of committing to the first locally best
+//! match. ROMol is used deliberately so the API works directly with ordinary
+//! Python Chem.Mol objects. Internally mutable RWMol copies are optimized and
+//! the best accepted plan is moved back into mol at the end.
 RDKIT_ADVANCEDDEPICTION_EXPORT SmartAbbreviationResult
 compute2DCoordsSmart(ROMol &mol,
                      const SmartAbbreviationParams &params =
