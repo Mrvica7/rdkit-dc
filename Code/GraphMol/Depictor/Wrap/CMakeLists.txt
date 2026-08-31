@@ -5,4 +5,10 @@ rdkit_python_extension(rdDepictor
                        LINK_LIBRARIES
             Depictor )
 
+rdkit_python_extension(rdAdvancedDepictor
+                       rdAdvancedDepictor.cpp
+                       DEST Chem
+                       LINK_LIBRARIES
+            Depictor )
+
 add_pytest(pyDepictor ${CMAKE_CURRENT_SOURCE_DIR}/testDepictor.py)
