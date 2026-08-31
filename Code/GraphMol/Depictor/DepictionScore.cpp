@@ -92,12 +92,19 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
 
   const auto &conf = mol.getConformer(confId);
 
-  for (auto b1It = mol.beginBonds(); b1It != mol.endBonds(); ++b1It) {
-    const auto *b1 = *b1It;
-    auto b2It = b1It;
-    ++b2It;
-    for (; b2It != mol.endBonds(); ++b2It) {
-      const auto *b2 = *b2It;
+  // Materialize the C++20 bond range once. This avoids the legacy
+  // ConstBondIterator API, whose definition is intentionally not pulled in by
+  // ROMol.h, and also makes the O(E^2) crossing scan straightforward.
+  std::vector<const RDKit::Bond *> bonds;
+  bonds.reserve(mol.getNumBonds(false));
+  for (const auto *bond : mol.bonds()) {
+    bonds.push_back(bond);
+  }
+
+  for (size_t i = 0; i < bonds.size(); ++i) {
+    const auto *b1 = bonds[i];
+    for (size_t j = i + 1; j < bonds.size(); ++j) {
+      const auto *b2 = bonds[j];
       const auto a1 = b1->getBeginAtomIdx();
       const auto a2 = b1->getEndAtomIdx();
       const auto c1 = b2->getBeginAtomIdx();
@@ -132,7 +139,7 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
 
   for (unsigned int i = 0; i < mol.getNumAtoms(); ++i) {
     const auto p = point2D(conf, i);
-    for (const auto *bond : mol.bonds()) {
+    for (const auto *bond : bonds) {
       const auto a = bond->getBeginAtomIdx();
       const auto b = bond->getEndAtomIdx();
       if (i == a || i == b || mol.getBondBetweenAtoms(i, a) ||
@@ -169,8 +176,8 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
   }
 
   std::vector<double> bondLengths;
-  bondLengths.reserve(mol.getNumBonds());
-  for (const auto *bond : mol.bonds()) {
+  bondLengths.reserve(bonds.size());
+  for (const auto *bond : bonds) {
     const auto p1 = point2D(conf, bond->getBeginAtomIdx());
     const auto p2 = point2D(conf, bond->getEndAtomIdx());
     bondLengths.push_back(std::hypot(p1.x - p2.x, p1.y - p2.y));
