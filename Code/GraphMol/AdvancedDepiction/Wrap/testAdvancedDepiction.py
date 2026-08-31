@@ -17,6 +17,8 @@ class TestAdvancedDepiction(unittest.TestCase):
 
         params = rdAdvancedDepiction.SmartAbbreviationParams()
         params.maxAbbreviations = 1
+        params.beamWidth = 4
+        params.maxTrials = 32
         params.minAtomsForAutoAbbreviation = 0
         params.atomReductionReward = 100.0
         params.abbreviationPenalty = 0.0
@@ -31,6 +33,14 @@ class TestAdvancedDepiction(unittest.TestCase):
         self.assertGreater(result.atomsRemoved, 0)
         self.assertLess(mol.GetNumAtoms(), original_atoms)
         self.assertEqual(mol.GetNumConformers(), 1)
+        self.assertLessEqual(result.trialsEvaluated, params.maxTrials)
+
+    def test_beam_search_controls_are_exposed(self):
+        params = rdAdvancedDepiction.SmartAbbreviationParams()
+        params.beamWidth = 7
+        params.maxTrials = 55
+        self.assertEqual(params.beamWidth, 7)
+        self.assertEqual(params.maxTrials, 55)
 
 
 if __name__ == "__main__":
