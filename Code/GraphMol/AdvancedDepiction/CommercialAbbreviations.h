@@ -6,6 +6,8 @@
 #include <GraphMol/Abbreviations/Abbreviations.h>
 #include <RDGeneral/RDExportMacros.h>
 
+#include <vector>
+
 #ifdef RDKIT_ADVANCEDDEPICTION_BUILD
 #define RDKIT_ADVANCEDDEPICTION_EXPORT RDKIT_EXPORT_API
 #else
