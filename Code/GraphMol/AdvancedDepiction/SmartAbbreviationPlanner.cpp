@@ -9,6 +9,7 @@
 #include <GraphMol/RWMol.h>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -61,13 +62,27 @@ std::vector<Abbreviations::AbbreviationDefinition> buildDefinitions(
   return definitions;
 }
 
-struct Trial {
+struct SearchState {
   std::unique_ptr<RWMol> mol;
   RDDepict::DepictionScore score;
-  std::string label;
+  std::vector<std::string> labels;
   unsigned int atomsRemoved = 0;
   double objective = std::numeric_limits<double>::infinity();
 };
+
+bool stateLess(const SearchState &lhs, const SearchState &rhs) {
+  constexpr double epsilon = 1e-9;
+  if (std::abs(lhs.objective - rhs.objective) > epsilon) {
+    return lhs.objective < rhs.objective;
+  }
+  if (lhs.labels.size() != rhs.labels.size()) {
+    return lhs.labels.size() < rhs.labels.size();
+  }
+  if (lhs.atomsRemoved != rhs.atomsRemoved) {
+    return lhs.atomsRemoved > rhs.atomsRemoved;
+  }
+  return lhs.labels < rhs.labels;
+}
 
 }  // namespace
 
@@ -86,84 +101,131 @@ SmartAbbreviationResult compute2DCoordsSmart(
   result.baselineObjective = baselineDepiction.score.total;
   result.finalObjective = result.baselineObjective;
 
-  if (!params.maxAbbreviations) {
+  if (!params.maxAbbreviations || !params.beamWidth || !params.maxTrials) {
+    moveBackToInput(mol, current);
+    return result;
+  }
+
+  if (current.getNumAtoms() < params.minAtomsForAutoAbbreviation &&
+      !hasHardDepictionDefect(baselineDepiction.score)) {
     moveBackToInput(mol, current);
     return result;
   }
 
   const auto definitions = buildDefinitions(params);
-  auto currentScore = baselineDepiction.score;
-  auto currentObjective = result.baselineObjective;
 
-  for (unsigned int step = 0; step < params.maxAbbreviations; ++step) {
-    if (current.getNumAtoms() < params.minAtomsForAutoAbbreviation &&
-        !hasHardDepictionDefect(currentScore)) {
-      break;
-    }
+  SearchState initial;
+  initial.mol = std::make_unique<RWMol>(current);
+  initial.score = baselineDepiction.score;
+  initial.objective = result.baselineObjective;
 
-    Trial best;
+  std::vector<SearchState> frontier;
+  frontier.push_back(std::move(initial));
 
-    // Evaluate each definition independently. RDKit's normal abbreviation
-    // function intentionally uses definition order as a greedy priority. Here
-    // layout quality determines priority, so each applicable match is trialed
-    // against the same current molecule before choosing a winner.
-    for (const auto &definition : definitions) {
-      if (!labelAllowed(definition.label, params)) {
+  std::unique_ptr<RWMol> bestMol;
+  RDDepict::DepictionScore bestScore = baselineDepiction.score;
+  std::vector<std::string> bestLabels;
+  unsigned int bestAtomsRemoved = 0;
+  double bestObjective = std::numeric_limits<double>::infinity();
+
+  for (unsigned int depth = 0;
+       depth < params.maxAbbreviations && !frontier.empty() &&
+       result.trialsEvaluated < params.maxTrials;
+       ++depth) {
+    std::vector<SearchState> nextFrontier;
+
+    for (const auto &parent : frontier) {
+      if (result.trialsEvaluated >= params.maxTrials) {
+        break;
+      }
+      if (parent.mol->getNumAtoms() < params.minAtomsForAutoAbbreviation &&
+          !hasHardDepictionDefect(parent.score)) {
         continue;
       }
-      std::vector<Abbreviations::AbbreviationDefinition> singleDefinition{
-          definition};
-      auto matches = Abbreviations::findApplicableAbbreviationMatches(
-          current, singleDefinition, params.maxCoverage);
 
-      for (const auto &match : matches) {
-        RWMol trialMol(current);
-        const auto beforeAtoms = trialMol.getNumAtoms();
-        Abbreviations::applyMatches(trialMol, {match});
-        refreshRingInfo(trialMol);
-        const auto afterAtoms = trialMol.getNumAtoms();
-        if (afterAtoms >= beforeAtoms) {
-          continue;
+      // Every applicable match is trialed against the same parent state. This
+      // handles overlapping definitions without relying on definition order.
+      // Keeping several parent states for the next depth also allows useful
+      // combinations that a purely greedy first choice would miss.
+      for (const auto &definition : definitions) {
+        if (result.trialsEvaluated >= params.maxTrials) {
+          break;
         }
-        const auto removedThisTrial = beforeAtoms - afterAtoms;
-        if (removedThisTrial < params.minAtomsRemoved) {
+        if (!labelAllowed(definition.label, params)) {
           continue;
         }
 
-        auto depiction =
-            RDDepict::compute2DCoordsAdvanced(trialMol, params.depictionParams);
-        ++result.trialsEvaluated;
+        std::vector<Abbreviations::AbbreviationDefinition> singleDefinition{
+            definition};
+        auto matches = Abbreviations::findApplicableAbbreviationMatches(
+            *parent.mol, singleDefinition, params.maxCoverage);
 
-        const unsigned int totalRemoved =
-            result.atomsRemoved + removedThisTrial;
-        const unsigned int totalAbbreviations =
-            static_cast<unsigned int>(result.abbreviations.size()) + 1;
-        const double objective =
-            objectiveFor(depiction.score, totalAbbreviations, totalRemoved,
-                         params);
+        for (const auto &match : matches) {
+          if (result.trialsEvaluated >= params.maxTrials) {
+            break;
+          }
 
-        if (objective < best.objective) {
-          best.mol = std::make_unique<RWMol>(trialMol);
-          best.score = depiction.score;
-          best.label = definition.label;
-          best.atomsRemoved = removedThisTrial;
-          best.objective = objective;
+          RWMol trialMol(*parent.mol);
+          const auto beforeAtoms = trialMol.getNumAtoms();
+          Abbreviations::applyMatches(trialMol, {match});
+          refreshRingInfo(trialMol);
+          const auto afterAtoms = trialMol.getNumAtoms();
+          if (afterAtoms >= beforeAtoms) {
+            continue;
+          }
+
+          const auto removedThisTrial = beforeAtoms - afterAtoms;
+          if (removedThisTrial < params.minAtomsRemoved) {
+            continue;
+          }
+
+          auto depiction = RDDepict::compute2DCoordsAdvanced(
+              trialMol, params.depictionParams);
+          ++result.trialsEvaluated;
+
+          SearchState candidate;
+          candidate.mol = std::make_unique<RWMol>(trialMol);
+          candidate.score = depiction.score;
+          candidate.labels = parent.labels;
+          candidate.labels.push_back(definition.label);
+          candidate.atomsRemoved = parent.atomsRemoved + removedThisTrial;
+          candidate.objective =
+              objectiveFor(candidate.score,
+                           static_cast<unsigned int>(candidate.labels.size()),
+                           candidate.atomsRemoved, params);
+
+          if (!bestMol || candidate.objective < bestObjective) {
+            bestMol = std::make_unique<RWMol>(*candidate.mol);
+            bestScore = candidate.score;
+            bestLabels = candidate.labels;
+            bestAtomsRemoved = candidate.atomsRemoved;
+            bestObjective = candidate.objective;
+          }
+
+          nextFrontier.push_back(std::move(candidate));
         }
       }
     }
 
-    if (!best.mol ||
-        currentObjective - best.objective < params.minimumObjectiveImprovement) {
+    if (nextFrontier.empty()) {
       break;
     }
 
-    current = *best.mol;
-    currentScore = best.score;
-    currentObjective = best.objective;
-    result.atomsRemoved += best.atomsRemoved;
-    result.abbreviations.push_back(best.label);
-    result.finalScore = best.score;
-    result.finalObjective = best.objective;
+    std::sort(nextFrontier.begin(), nextFrontier.end(), stateLess);
+    if (nextFrontier.size() > params.beamWidth) {
+      nextFrontier.resize(params.beamWidth);
+    }
+    frontier = std::move(nextFrontier);
+  }
+
+  if (bestMol &&
+      result.baselineObjective - bestObjective >=
+          params.minimumObjectiveImprovement) {
+    current = *bestMol;
+    result.finalScore = bestScore;
+    result.finalObjective = bestObjective;
+    result.atomsRemoved = bestAtomsRemoved;
+    result.abbreviations = std::move(bestLabels);
   }
 
   moveBackToInput(mol, current);
