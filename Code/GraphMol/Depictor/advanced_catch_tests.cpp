@@ -5,6 +5,9 @@
 #include <GraphMol/SmilesParse/SmilesParse.h>
 #include <GraphMol/Conformer.h>
 
+#include <cmath>
+#include <memory>
+
 TEST_CASE("depiction scorer detects bond crossings") {
   std::unique_ptr<RDKit::ROMol> mol(RDKit::SmilesToMol("C1CCC1"));
   REQUIRE(mol);
