@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build g++ libboost-all-dev
+            cmake ninja-build g++ libboost-all-dev libfreetype6-dev
 
       - name: Configure minimal RDKit build
         run: |
