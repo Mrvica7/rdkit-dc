@@ -71,10 +71,9 @@ TEST_CASE("smart planner can leave abbreviation disabled") {
 }
 
 TEST_CASE("generic phenyl abbreviation is opt-in") {
-  // Biphenyl isolates the generic Ph rule: unlike the previous alkylbenzene
-  // fixture, it cannot also be interpreted as Bn or another named protecting
-  // group from the commercial abbreviation set.
-  const std::string smiles = "c1ccccc1-c1ccccc1";
+  // Benzonitrile isolates the generic Ph rule without also matching Bn, Bz,
+  // PMB, or another named aryl-containing protecting group.
+  const std::string smiles = "N#Cc1ccccc1";
 
   std::unique_ptr<RDKit::ROMol> parsed1(RDKit::SmilesToMol(smiles));
   REQUIRE(parsed1);
@@ -82,7 +81,7 @@ TEST_CASE("generic phenyl abbreviation is opt-in") {
 
   RDKit::AdvancedDepiction::SmartAbbreviationParams params;
   params.maxAbbreviations = 1;
-  params.maxCoverage = 0.80;
+  params.maxCoverage = 0.90;
   params.minAtomsForAutoAbbreviation = 0;
   params.minAtomsRemoved = 3;
   params.atomReductionReward = 100.0;
@@ -104,4 +103,59 @@ TEST_CASE("generic phenyl abbreviation is opt-in") {
       RDKit::AdvancedDepiction::compute2DCoordsSmart(aggressive, params);
   REQUIRE(aggressiveResult.abbreviations.size() == 1);
   CHECK(aggressiveResult.abbreviations.front() == "Ph");
+}
+
+TEST_CASE("beam search can accept a combination rejected one step at a time") {
+  // Two Boc groups provide a controlled look-ahead case. The acceptance
+  // threshold is deliberately higher than the reward from one Boc but lower
+  // than the reward from the two-group plan. A greedy planner that requires an
+  // accepted first step cannot reach the final combination.
+  std::unique_ptr<RDKit::ROMol> parsed(
+      RDKit::SmilesToMol("CC(C)(C)OC(=O)NCCNC(=O)OC(C)(C)C"));
+  REQUIRE(parsed);
+  RDKit::RWMol mol(*parsed);
+
+  RDKit::AdvancedDepiction::SmartAbbreviationParams params;
+  params.maxAbbreviations = 2;
+  params.beamWidth = 8;
+  params.maxTrials = 96;
+  params.maxCoverage = 0.80;
+  params.minAtomsForAutoAbbreviation = 0;
+  params.minAtomsRemoved = 3;
+  params.atomReductionReward = 1000.0;
+  params.abbreviationPenalty = 0.0;
+  params.minimumObjectiveImprovement = 9000.0;
+  params.depictionParams.maxCandidates = 3;
+  params.depictionParams.useCoordGenCandidate = false;
+
+  const auto result =
+      RDKit::AdvancedDepiction::compute2DCoordsSmart(mol, params);
+
+  REQUIRE(result.abbreviations.size() == 2);
+  CHECK(std::count(result.abbreviations.begin(), result.abbreviations.end(),
+                   "Boc") == 2);
+  CHECK(result.baselineObjective - result.finalObjective >= 9000.0);
+}
+
+TEST_CASE("beam search respects the redraw trial budget") {
+  std::unique_ptr<RDKit::ROMol> parsed(
+      RDKit::SmilesToMol("CC(C)(C)OC(=O)NCCNC(=O)OC(C)(C)C"));
+  REQUIRE(parsed);
+  RDKit::RWMol mol(*parsed);
+
+  RDKit::AdvancedDepiction::SmartAbbreviationParams params;
+  params.maxAbbreviations = 3;
+  params.beamWidth = 8;
+  params.maxTrials = 1;
+  params.maxCoverage = 0.80;
+  params.minAtomsForAutoAbbreviation = 0;
+  params.atomReductionReward = 100.0;
+  params.abbreviationPenalty = 0.0;
+  params.minimumObjectiveImprovement = 0.0;
+  params.depictionParams.maxCandidates = 3;
+  params.depictionParams.useCoordGenCandidate = false;
+
+  const auto result =
+      RDKit::AdvancedDepiction::compute2DCoordsSmart(mol, params);
+  CHECK(result.trialsEvaluated <= 1);
 }
