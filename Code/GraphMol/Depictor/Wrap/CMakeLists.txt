@@ -12,3 +12,4 @@ rdkit_python_extension(rdAdvancedDepictor
             Depictor )
 
 add_pytest(pyDepictor ${CMAKE_CURRENT_SOURCE_DIR}/testDepictor.py)
+add_pytest(pyAdvancedDepictor ${CMAKE_CURRENT_SOURCE_DIR}/testAdvancedDepictor.py)
