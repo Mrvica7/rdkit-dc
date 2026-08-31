@@ -71,7 +71,10 @@ TEST_CASE("smart planner can leave abbreviation disabled") {
 }
 
 TEST_CASE("generic phenyl abbreviation is opt-in") {
-  const std::string smiles = "CCCCCCCCCCc1ccccc1";
+  // Biphenyl isolates the generic Ph rule: unlike the previous alkylbenzene
+  // fixture, it cannot also be interpreted as Bn or another named protecting
+  // group from the commercial abbreviation set.
+  const std::string smiles = "c1ccccc1-c1ccccc1";
 
   std::unique_ptr<RDKit::ROMol> parsed1(RDKit::SmilesToMol(smiles));
   REQUIRE(parsed1);
@@ -79,7 +82,9 @@ TEST_CASE("generic phenyl abbreviation is opt-in") {
 
   RDKit::AdvancedDepiction::SmartAbbreviationParams params;
   params.maxAbbreviations = 1;
+  params.maxCoverage = 0.80;
   params.minAtomsForAutoAbbreviation = 0;
+  params.minAtomsRemoved = 3;
   params.atomReductionReward = 100.0;
   params.abbreviationPenalty = 0.0;
   params.minimumObjectiveImprovement = 0.0;
