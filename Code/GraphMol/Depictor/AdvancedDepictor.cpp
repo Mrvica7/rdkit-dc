@@ -63,14 +63,18 @@ AdvancedDepictionResult compute2DCoordsAdvanced(
   base.forceRDKit = true;
   evaluate(base);
 
-  if (params.useRingTemplates) {
+  if (params.useRingTemplates && candidates.size() < maxCandidates) {
     auto templated = base;
     templated.useRingTemplates = true;
     evaluate(templated);
   }
 
+  // Reserve one candidate slot for CoordGen when requested.
+  const unsigned int sampledTarget =
+      params.useCoordGenCandidate && maxCandidates > 1 ? maxCandidates - 1
+                                                       : maxCandidates;
   unsigned int candidateIndex = 0;
-  while (candidates.size() < maxCandidates) {
+  while (candidates.size() < sampledTarget) {
     auto sampled = base;
     sampled.useRingTemplates = params.useRingTemplates;
     sampled.nFlipsPerSample = params.flipsPerSample;
@@ -79,6 +83,16 @@ AdvancedDepictionResult compute2DCoordsAdvanced(
     sampled.permuteDeg4Nodes = params.permuteDeg4Nodes;
     evaluate(sampled);
     ++candidateIndex;
+  }
+
+  if (params.useCoordGenCandidate && candidates.size() < maxCandidates) {
+    const bool previousPreference = preferCoordGen;
+    preferCoordGen = true;
+    Compute2DCoordParameters coordgen;
+    coordgen.canonOrient = params.canonOrient;
+    coordgen.forceRDKit = false;
+    evaluate(coordgen);
+    preferCoordGen = previousPreference;
   }
 
   const auto best = std::min_element(
