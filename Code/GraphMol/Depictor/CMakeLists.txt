@@ -35,6 +35,7 @@ set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES
 
 
 rdkit_catch_test(depictorCatch catch_tests.cpp LINK_LIBRARIES Depictor SmilesParse FileParsers)
+rdkit_catch_test(advancedDepictorCatch advanced_catch_tests.cpp LINK_LIBRARIES Depictor SmilesParse)
 
 
 if(RDK_BUILD_BOOST_PYTHON_WRAPPERS)
