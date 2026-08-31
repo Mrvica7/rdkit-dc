@@ -10,13 +10,15 @@ namespace {
 // The first atom in each SMARTS is the atom connected to the rest of the
 // molecule. parseAbbreviations() supplies the external dummy attachment atom.
 // Keep this list conservative: these are groups for which abbreviated forms are
-// widely recognizable in medicinal/synthetic chemistry.
+// widely recognizable in medicinal/synthetic chemistry. Generic Ph is present
+// but the smart planner keeps it disabled by default.
 const std::string commercialAbbreviations = R"ABBREVS(
 Boc C(=O)OC(C)(C)C Boc
 Cbz C(=O)OCc1ccccc1 Cbz
 Fmoc C(=O)OCC1c2ccccc2-c2ccccc21 Fmoc
 Alloc C(=O)OCC=C Alloc
 Bn Cc1ccccc1 Bn
+Ph c1ccccc1 Ph
 PMB Cc1ccc(OC)cc1 PMB
 Bz C(=O)c1ccccc1 Bz
 Piv C(=O)C(C)(C)C Piv
