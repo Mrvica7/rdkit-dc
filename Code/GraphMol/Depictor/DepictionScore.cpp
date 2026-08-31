@@ -18,6 +18,7 @@ namespace RDDepict {
 namespace {
 
 constexpr double kEps = 1.0e-8;
+constexpr double kPi = 3.14159265358979323846;
 constexpr double kAtomClashDistance = 0.55;
 constexpr double kAtomBondClashDistance = 0.28;
 constexpr double kCongestionDistance = 1.05;
@@ -65,18 +66,18 @@ double pointSegmentDistance(const RDGeom::Point2D &p,
 
 double angleDeg(const RDGeom::Point2D &a, const RDGeom::Point2D &center,
                 const RDGeom::Point2D &b) {
-  double ax = a.x - center.x;
-  double ay = a.y - center.y;
-  double bx = b.x - center.x;
-  double by = b.y - center.y;
-  double al = std::hypot(ax, ay);
-  double bl = std::hypot(bx, by);
+  const double ax = a.x - center.x;
+  const double ay = a.y - center.y;
+  const double bx = b.x - center.x;
+  const double by = b.y - center.y;
+  const double al = std::hypot(ax, ay);
+  const double bl = std::hypot(bx, by);
   if (al < kEps || bl < kEps) {
     return 0.0;
   }
   double cosine = (ax * bx + ay * by) / (al * bl);
   cosine = std::clamp(cosine, -1.0, 1.0);
-  return std::acos(cosine) * 180.0 / M_PI;
+  return std::acos(cosine) * 180.0 / kPi;
 }
 
 }  // namespace
@@ -91,11 +92,11 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
 
   const auto &conf = mol.getConformer(confId);
 
-  // Bond crossings: only compare non-adjacent bonds. A true crossing is a hard
-  // failure and intentionally dominates the score.
   for (auto b1It = mol.beginBonds(); b1It != mol.endBonds(); ++b1It) {
     const auto *b1 = *b1It;
-    for (auto b2It = b1It + 1; b2It != mol.endBonds(); ++b2It) {
+    auto b2It = b1It;
+    ++b2It;
+    for (; b2It != mol.endBonds(); ++b2It) {
       const auto *b2 = *b2It;
       const auto a1 = b1->getBeginAtomIdx();
       const auto a2 = b1->getEndAtomIdx();
@@ -111,7 +112,6 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
     }
   }
 
-  // Atom-atom clashes and a softer congestion term.
   for (unsigned int i = 0; i < mol.getNumAtoms(); ++i) {
     const auto pi = point2D(conf, i);
     for (unsigned int j = i + 1; j < mol.getNumAtoms(); ++j) {
@@ -130,8 +130,6 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
     }
   }
 
-  // Atom-bond clashes. Endpoints and atoms directly bonded to either endpoint
-  // are excluded because those are normal local drawing geometries.
   for (unsigned int i = 0; i < mol.getNumAtoms(); ++i) {
     const auto p = point2D(conf, i);
     for (const auto *bond : mol.bonds()) {
@@ -148,9 +146,6 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
     }
   }
 
-  // Penalize very acute local branch angles. This is deliberately conservative:
-  // chemistry-specific ideal angles remain the responsibility of the base
-  // depictor; this only catches obviously unreadable layouts.
   for (const auto *atom : mol.atoms()) {
     std::vector<unsigned int> nbrs;
     for (const auto *nbr : mol.atomNeighbors(atom)) {
@@ -173,7 +168,6 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
     }
   }
 
-  // Bond-length consistency.
   std::vector<double> bondLengths;
   bondLengths.reserve(mol.getNumBonds());
   for (const auto *bond : mol.bonds()) {
@@ -194,7 +188,6 @@ DepictionScore scoreDepiction(const RDKit::ROMol &mol, int confId,
     }
   }
 
-  // Extremely elongated depictions are harder to use in catalog grids.
   double minX = std::numeric_limits<double>::max();
   double maxX = std::numeric_limits<double>::lowest();
   double minY = std::numeric_limits<double>::max();
